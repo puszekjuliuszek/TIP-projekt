@@ -1,0 +1,117 @@
+apiVersion: kwok.x-k8s.io/v1alpha1
+kind: Stage
+metadata:
+  name: node-initialize
+spec:
+  resourceRef:
+    apiVersion: v1
+    kind: Node
+  selector:
+    matchLabels:
+      type: kwok
+  next:
+    finalizers:
+    - kwok.x-k8s.io/node
+    statusTemplate: |
+      conditions:
+      - lastHeartbeatTime: {{ now | quote }}
+        lastTransitionTime: {{ now | quote }}
+        message: kubelet is posting ready status
+        reason: KubeletReady
+        status: "True"
+        type: Ready
+      - lastHeartbeatTime: {{ now | quote }}
+        lastTransitionTime: {{ now | quote }}
+        message: kubelet has sufficient disk space available
+        reason: KubeletHasSufficientDisk
+        status: "False"
+        type: DiskPressure
+      - lastHeartbeatTime: {{ now | quote }}
+        lastTransitionTime: {{ now | quote }}
+        message: kubelet has sufficient memory available
+        reason: KubeletHasSufficientMemory
+        status: "False"
+        type: MemoryPressure
+      - lastHeartbeatTime: {{ now | quote }}
+        lastTransitionTime: {{ now | quote }}
+        message: kubelet has no disk space available
+        reason: KubeletHasNoDiskPressure
+        status: "False"
+        type: PIDPressure
+      - lastHeartbeatTime: {{ now | quote }}
+        lastTransitionTime: {{ now | quote }}
+        message: RouteController created a route
+        reason: RouteCreated
+        status: "False"
+        type: NetworkUnavailable
+      addresses:
+      - address: {{ .metadata.name }}
+        type: Hostname
+      - address: {{ nodeIP }}
+        type: InternalIP
+      allocatable:
+        cpu: {{ .status.capacity.cpu }}
+        memory: {{ .status.capacity.memory }}
+        pods: {{ .status.capacity.pods }}
+      capacity:
+        cpu: {{ .status.capacity.cpu }}
+        memory: {{ .status.capacity.memory }}
+        pods: {{ .status.capacity.pods }}
+      nodeInfo:
+        architecture: amd64
+        bootID: ""
+        containerRuntimeVersion: ""
+        kernelVersion: ""
+        kubeProxyVersion: {{ env "KWOK_KUBE_VERSION" }}
+        kubeletVersion: {{ env "KWOK_KUBE_VERSION" }}
+        machineID: ""
+        operatingSystem: linux
+        osImage: ""
+        systemUUID: ""
+      phase: Running
+---
+apiVersion: kwok.x-k8s.io/v1alpha1
+kind: Stage
+metadata:
+  name: pod-create
+spec:
+  resourceRef:
+    apiVersion: v1
+    kind: Pod
+  selector:
+    matchLabels:
+      kwok.x-k8s.io/node: kwok-*
+  next:
+    statusTemplate: |
+      conditions:
+      - lastProbeTime: null
+        lastTransitionTime: {{ now | quote }}
+        status: "True"
+        type: Initialized
+      - lastProbeTime: null
+        lastTransitionTime: {{ now | quote }}
+        status: "True"
+        type: Ready
+      - lastProbeTime: null
+        lastTransitionTime: {{ now | quote }}
+        status: "True"
+        type: ContainersReady
+      - lastProbeTime: null
+        lastTransitionTime: {{ now | quote }}
+        status: "True"
+        type: PodScheduled
+      containerStatuses:
+      {{ range .spec.containers }}
+      - image: {{ .image }}
+        name: {{ .name }}
+        ready: true
+        restartCount: 0
+        started: true
+        state:
+          running:
+            startedAt: {{ now | quote }}
+      {{ end }}
+      hostIP: {{ nodeIPWith .spec.nodeName }}
+      phase: Running
+      podIP: {{ podIP }}
+      startTime: {{ now | quote }}

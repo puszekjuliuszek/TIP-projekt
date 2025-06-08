@@ -1,0 +1,28 @@
+KWOK Installation Info
+======================
+Version: v0.7.0
+Status: ✅ Zainstalowany i uruchomiony
+Namespace: kube-system (oficjalny)
+
+Komponenty:
+✅ KWOK Controller deployment
+✅ KWOK CRDs (Stage, ResourceUsage, etc.)
+✅ Stage configurations (node-initialize, pod-ready, etc.)
+✅ RBAC permissions (z leases)
+
+Sprawdzenie statusu:
+- kubectl get pods -n kube-system -l app=kwok-controller
+- kubectl get stages
+
+Port-forward dla metryk:
+kubectl port-forward -n kube-system service/kwok-controller 10247:10247
+
+Zainstalowano: Sun Jun  8 17:27:29 CEST 2025
+
+📚 Kolejne kroki:
+1. Utwórz fake nodes: ./create-fake-nodes.sh
+2. Zainstaluj Istio: ./scripts/03-install-istio.sh
+3. Wdróż aplikacje: ./scripts/04-deploy-isotope.sh
+4. Skonfiguruj monitoring: ./scripts/05-monitoring.sh
+
+Lub użyj automatycznej instalacji: ./setup-remaining.sh

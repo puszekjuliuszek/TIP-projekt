@@ -1,0 +1,220 @@
+# Konfiguracja topologii dla testów wydajności
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: isotope-config
+  namespace: isotope
+data:
+  topology.yaml: |
+    # Topologia service mesh z 10 serwisami
+    services:
+    # Frontend service - punkt wejścia
+    - name: frontend
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 100m
+        memory: 128Mi
+      script:
+      - call:
+          service: gateway
+          size: 1KB
+      - call:
+          service: productcatalog
+          size: 2KB
+      - call:
+          service: cart
+          size: 1KB
+      errorRate: 0.01
+      responseSize: 4KB
+    
+    # Gateway service - routing i load balancing
+    - name: gateway
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 200m
+        memory: 256Mi
+      script:
+      - call:
+          service: auth
+          size: 512B
+      - call:
+          service: productcatalog
+          size: 1KB
+          
+    # Authentication service
+    - name: auth
+      type: http
+      numReplicas: 4
+      compute:
+        cpu: 150m
+        memory: 192Mi
+      script:
+      - call:
+          service: database
+          size: 256B
+      errorRate: 0.005
+      responseSize: 1KB
+      
+    # Product catalog service
+    - name: productcatalog
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 300m
+        memory: 512Mi
+      script:
+      - call:
+          service: database
+          size: 2KB
+      - call:
+          service: cache
+          size: 1KB
+      responseSize: 8KB
+      
+    # Shopping cart service
+    - name: cart
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 200m
+        memory: 256Mi
+      script:
+      - call:
+          service: database
+          size: 1KB
+      - call:
+          service: payment
+          size: 2KB
+          
+    # Payment processing service
+    - name: payment
+      type: http
+      numReplicas: 2
+      compute:
+        cpu: 250m
+        memory: 384Mi
+      script:
+      - call:
+          service: database
+          size: 1KB
+      - call:
+          service: external-payment
+          size: 4KB
+      errorRate: 0.02
+      responseSize: 2KB
+      
+    # External payment gateway (simulate external service)
+    - name: external-payment
+      type: http
+      numReplicas: 2
+      compute:
+        cpu: 100m
+        memory: 128Mi
+      responseSize: 1KB
+      errorRate: 0.03
+      
+    # Database service
+    - name: database
+      type: http
+      numReplicas: 5
+      compute:
+        cpu: 500m
+        memory: 1Gi
+      responseSize: 4KB
+      errorRate: 0.001
+      
+    # Cache service (Redis-like)
+    - name: cache
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 200m
+        memory: 512Mi
+      responseSize: 2KB
+      errorRate: 0.005
+      
+    # Recommendation service
+    - name: recommendation
+      type: http
+      numReplicas: 3
+      compute:
+        cpu: 400m
+        memory: 768Mi
+      script:
+      - call:
+          service: database
+          size: 3KB
+      - call:
+          service: ml-service
+          size: 5KB
+      responseSize: 6KB
+      
+    # ML service dla rekomendacji
+    - name: ml-service
+      type: http
+      numReplicas: 2
+      compute:
+        cpu: 800m
+        memory: 1Gi
+      responseSize: 10KB
+      errorRate: 0.01
+      
+    # Load generator configuration
+    loadGenerator:
+      startupDelay: 30s
+      connections: 10
+      rps: 50
+      duration: 300s # 5 minut ciągłego ruchu
+---
+# Deployment generatora ruchu
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: isotope
+  labels:
+    app: load-generator
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+        version: v1
+    spec:
+      containers:
+      - name: load-generator
+        image: istio/isotope:latest
+        args:
+        - --config-file=/etc/isotope/topology.yaml
+        - --client-mode
+        - --log-level=info
+        - --metrics-port=9090
+        ports:
+        - containerPort: 9090
+          name: metrics
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/isotope
+        env:
+        - name: NAMESPACE
+          value: isotope
+        - name: SERVICE_VERSION
+          value: v1
+      volumes:
+      - name: config
+        configMap:
+          name: isotope-config

@@ -1,0 +1,64 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: kwok-performance-test
+  region: us-west-2
+  version: "1.27"
+
+# Konfiguracja control plane będzie automatyczna
+
+# Managed node groups
+managedNodeGroups:
+  - name: primary-nodes
+    instanceType: m5.large
+    minSize: 1
+    maxSize: 10
+    desiredCapacity: 3
+    volumeSize: 50
+    ssh:
+      allow: false
+    labels:
+      role: worker
+    tags:
+      Project: "KWOK-Performance-Test"
+      Environment: "Testing"
+    
+    # Optimalizacje dla wydajności
+    preBootstrapCommands:
+      - "echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf"
+      - "echo 'net.bridge.bridge-nf-call-iptables = 1' >> /etc/sysctl.conf"
+      - "sysctl -p"
+
+# Addons potrzebne dla KWOK i monitorowania
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+
+# CloudWatch logging
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+# IAM dla service accounts
+iam:
+  withOIDC: true
+  serviceAccounts:
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+    - metadata:
+        name: ebs-csi-controller-sa
+        namespace: kube-system
+      wellKnownPolicies:
+        ebsCSIController: true
+    - metadata:
+        name: cluster-autoscaler
+        namespace: kube-system
+      wellKnownPolicies:
+        autoScaler: true
+

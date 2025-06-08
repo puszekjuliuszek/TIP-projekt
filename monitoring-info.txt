@@ -1,0 +1,39 @@
+Advanced Monitoring Setup
+=========================
+Namespace: monitoring
+
+Komponenty:
+- Prometheus: Zbieranie metryk
+- Grafana: Wizualizacja (hasło: admin123)
+- kube-state-metrics: Metryki stanu klastra
+
+Dostęp:
+- Grafana: http://ad9e2ea44087e4a39a2592f26d8d39e1-1646114464.us-east-1.elb.amazonaws.com:3000 (admin/admin123)
+- Prometheus: kubectl port-forward -n monitoring svc/prometheus 9090:9090
+
+Kluczowe metryki monitorowane:
+- API Server latency i throughput
+- etcd performance
+- Scheduler queue depth
+- Controller Manager metrics
+- CoreDNS performance
+- Istio control plane metrics
+- KWOK controller metrics
+
+Dashboardy Grafana:
+- Kubernetes Control Plane Performance
+- Istio Control Plane Performance
+
+Testy wydajności:
+- ./performance-test.sh
+
+Port-forwards dla dostępu lokalnego:
+- kubectl port-forward -n monitoring svc/grafana 3000:3000
+- kubectl port-forward -n monitoring svc/prometheus 9090:9090
+
+Sprawdzanie statusu:
+- kubectl get pods -n monitoring
+- kubectl logs -n monitoring deployment/prometheus
+- kubectl logs -n monitoring deployment/grafana
+
+Konfigurowano: Sun Jun  8 19:20:20 CEST 2025

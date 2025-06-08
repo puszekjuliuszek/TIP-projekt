@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kwok-config
+  namespace: kwok-performance
+data:
+  config.yaml: |
+    kind: KwokConfiguration
+    apiVersion: config.kwok.x-k8s.io/v1alpha1
+    options:
+      # Włącz verbose logging dla debugowania
+      v: "DEBUG"
+      # Zarządzaj wszystkimi węzłami
+      manage-all-nodes: true
+      # Optimalizacja wydajności
+      enable-crds: []
+      server-address: "0.0.0.0:10247"
+      node-lease-duration-seconds: 40
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwok-controller
+  namespace: kwok-performance
+  labels:
+    app: kwok-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kwok-controller
+  template:
+    metadata:
+      labels:
+        app: kwok-controller
+    spec:
+      serviceAccountName: kwok-controller
+      containers:
+      - name: kwok-controller
+        image: registry.k8s.io/kwok/kwok:v0.7.0
+        args:
+        - --config=/etc/kwok/config.yaml
+        - --v=DEBUG
+        - --manage-all-nodes
+        - --node-lease-duration-seconds=40
+        - --server-address=0.0.0.0:10247
+        ports:
+        - containerPort: 10247
+          name: metrics
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kwok
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        env:
+        - name: KWOK_CONTROLLER_PORT
+          value: "10247"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 10247
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 10247
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: kwok-config
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kwok-controller
+  namespace: kwok-performance
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kwok-controller
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["nodes/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["events.k8s.io"]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kwok-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kwok-controller
+subjects:
+- kind: ServiceAccount
+  name: kwok-controller
+  namespace: kwok-performance
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kwok-controller-metrics
+  namespace: kwok-performance
+  labels:
+    app: kwok-controller
+spec:
+  ports:
+  - port: 10247
+    name: metrics
+    protocol: TCP
+  selector:
+    app: kwok-controller
