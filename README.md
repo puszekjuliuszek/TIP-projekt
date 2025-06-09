@@ -95,11 +95,11 @@ vim ~/.aws/credentials #jesli uzywasz AWS Academy/VocLabs to jeszcze musisz mie�
 Jeśli masz ograniczone uprawnienia AWS (np. AWS Academy/VocLabs):
 
 1. **Utwórz klaster ręcznie przez konsolę AWS** - szczegółowa instrukcja: [`docs/manual-eks-setup.md`](docs/manual-eks-setup.md)
-2**Zweryfikuj klaster**:
+2. **Zweryfikuj klaster**:
    ```bash
    ./verify-eks-cluster.sh
    ```
-3**Uruchom instalację pozostałych komponentów**:
+3. **Uruchom instalację pozostałych komponentów**:
    ```bash
    ./setup-remaining.sh
    ```
