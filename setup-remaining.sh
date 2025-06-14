@@ -77,7 +77,7 @@ echo -e "${GREEN}📊 Węzły: $(kubectl get nodes --no-headers | wc -l)${NC}"
 show_progress 1 5 "INSTALACJA KWOK + FAKE NODES"
 echo -e "${GREEN}⏱️  Szacowany czas: 5-10 minut${NC}"
 
-# ./scripts/02-install-kwok.sh
+./scripts/02-install-kwok.sh
 
 if check_step_status "KWOK Controller" "kubectl get pods -n kube-system -l app=kwok-controller | grep Running"; then
     echo -e "${GREEN}🎉 KWOK Controller gotowy!${NC}"
@@ -99,7 +99,7 @@ sleep 30
 show_progress 2 5 "INSTALACJA ISTIO"
 echo -e "${GREEN}⏱️  Szacowany czas: 5-10 minut${NC}"
 
-# ./scripts/03-install-istio.sh
+./scripts/03-install-istio.sh
 
 if check_step_status "Istio Control Plane" "kubectl get pods -n istio-system -l app=istiod | grep Running"; then
     echo -e "${GREEN}🎉 Istio gotowy!${NC}"
@@ -115,7 +115,7 @@ sleep 30
 show_progress 3 5 "WDROŻENIE APLIKACJI TESTOWYCH"
 echo -e "${GREEN}⏱️  Szacowany czas: 10-15 minut${NC}"
 
-# ./scripts/04-deploy-isotope.sh
+./scripts/04-deploy-isotope.sh
 
 if check_step_status "Test Applications" "kubectl get pods -n testapp | grep Running | wc -l | awk '{print (\$1 >= 5)}'"; then
     echo -e "${GREEN}🎉 Aplikacje testowe gotowe!${NC}"
