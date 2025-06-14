@@ -11,6 +11,7 @@ NC='\033[0m' # No Color
 # Konfiguracja
 MONITORING_NAMESPACE="${MONITORING_NAMESPACE:-monitoring}"
 GRAFANA_PASSWORD="${GRAFANA_PASSWORD:-admin123}"
+ISOTOPE_NAMESPACE="${ISOTOPE_NAMESPACE:-isotope}"
 
 echo -e "${GREEN}🚀 Rozpoczynam konfigurację zaawansowanego monitorowania...${NC}"
 
@@ -172,16 +173,11 @@ data:
       - role: endpoints
         namespaces:
           names:
-          - kwok-system
+          - kube-system
       relabel_configs:
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
-        regex: kwok-controller-metrics;metrics
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
+        regex: kwok-controller-metrics-service;metrics
 
     # CoreDNS metrics
     - job_name: 'coredns'
@@ -194,28 +190,13 @@ data:
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: kube-dns;metrics
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
 
     # kube-state-metrics
     - job_name: 'kube-state-metrics'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - ${MONITORING_NAMESPACE}
-      relabel_configs:
-      - source_labels: [__meta_kubernetes_service_name]
-        action: keep
-        regex: kube-state-metrics
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
+      static_configs:
+      - targets:
+        - kube-state-metrics:8080
+        - kube-state-metrics:8081
 
     # Node exporter
     - job_name: 'node-exporter'
@@ -235,29 +216,36 @@ data:
         target_label: __address__
 
     # Isotope aplikacje
-    - job_name: 'isotope-services'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - isotope
-      relabel_configs:
-      - source_labels: [__meta_kubernetes_endpoint_port_name]
-        action: keep
-        regex: metrics
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
-      - action: labelmap
-        regex: __meta_kubernetes_service_label_(.+)
-      - source_labels: [__meta_kubernetes_namespace]
-        action: replace
-        target_label: namespace
-      - source_labels: [__meta_kubernetes_service_name]
-        action: replace
-        target_label: service
+    # - job_name: 'isotope-services'
+    #   kubernetes_sd_configs:
+    #   - role: endpoints
+    #     namespaces:
+    #       names:
+    #       - ${ISOTOPE_NAMESPACE}
+    #   relabel_configs:
+    #   - source_labels: [__meta_kubernetes_service_name]
+    #     action: keep
+    #     regex: (frontend|gateway|auth|productcatalog|cart|payment|database|cache|recommendation)
+    #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+    #     action: keep
+    #     regex: true
+    #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+    #     action: replace
+    #     target_label: __metrics_path__
+    #     regex: (.+)
+    #   - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+    #     action: replace
+    #     regex: ([^:]+)(?::\d+)?;(\d+)
+    #     replacement: \$1:\$2
+    #     target_label: __address__
+    #   - action: labelmap
+    #     regex: __meta_kubernetes_service_label_(.+)
+    #   - source_labels: [__meta_kubernetes_namespace]
+    #     action: replace
+    #     target_label: namespace
+    #   - source_labels: [__meta_kubernetes_service_name]
+    #     action: replace
+    #     target_label: service
 
   # Alerting rules dla control plane
   alerts.yml: |
@@ -823,7 +811,7 @@ data:
     - name: Prometheus
       type: prometheus
       access: proxy
-      url: http://prometheus:9090
+      url: http://prometheus.monitoring.svc.cluster.local:9090
       isDefault: true
 ---
 apiVersion: apps/v1

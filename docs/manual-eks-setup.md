@@ -13,11 +13,11 @@ Ta instrukcja pomoże utworzyć klaster EKS ręcznie przez konsolę AWS, co jest
 ### 1.2 Konfiguracja klastra
 
 **Cluster configuration:**
-- **Name:** `kwok-performance-test`
-- **Kubernetes version:** `1.32`
-- **Cluster service role:** `Lab Role` 
 - **Custom configuration**
-- **Enable EKS costam:** Wcale nie
+- **Use EKS Auto Mode:** wyłaczyc
+- **Name:** `kwok-performance-test`
+- **Cluster service role:** `Lab Role`
+- **Kubernetes version:** `1.32`
 
 **VPC and subnets:**
 - **VPC:** Wybierz domyślne VPC
