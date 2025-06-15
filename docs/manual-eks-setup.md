@@ -53,7 +53,7 @@ Ta instrukcja pomoże utworzyć klaster EKS ręcznie przez konsolę AWS, co jest
 **Node group scaling configuration:**
 - **Desired size:** `2`
 - **Minimum size:** `1`
-- **Maximum size:** `4`
+- **Maximum size:** `10`
 
 ### 2.3 Networking
 
