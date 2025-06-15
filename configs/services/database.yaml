@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: database
+  namespace: testapp
+  labels:
+    app: database
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: database
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: database
+        version: v1
+    spec:
+      containers:
+      - name: database
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database
+  namespace: testapp
+  labels:
+    app: database
+spec:
+  selector:
+    app: database
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http

@@ -4,27 +4,29 @@ metadata:
   name: grafana-config
   namespace: monitoring
 data:
-  grafana.ini: |
-    [analytics]
-    check_for_updates = true
-    [grafana_net]
-    url = https://grafana.net
-    [log]
-    mode = console
-    [paths]
-    data = /var/lib/grafana/data
-    logs = /var/log/grafana
-    plugins = /var/lib/grafana/plugins
-    [server]
-    root_url = http://localhost:3000/
-  datasources.yaml: |
+  grafana.ini: |-
+    [auth.anonymous]
+    enabled = true
+    org_role = Viewer
+  datasources.yaml: |-
     apiVersion: 1
     datasources:
     - name: Prometheus
       type: prometheus
-      access: proxy
       url: http://prometheus.monitoring.svc.cluster.local:9090
+      access: proxy
       isDefault: true
+  dashboards.yaml: |-
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /etc/grafana/provisioning/dashboards/default
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -66,8 +68,14 @@ spec:
         - mountPath: /etc/grafana/grafana.ini
           name: grafana-config
           subPath: grafana.ini
-        - mountPath: /etc/grafana/provisioning/datasources
+        - mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
           name: grafana-config
+          subPath: datasources.yaml
+        - mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+          name: grafana-config
+          subPath: dashboards.yaml
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards/default
         env:
         - name: GF_SECURITY_ADMIN_PASSWORD
           value: admin123
@@ -79,11 +87,9 @@ spec:
       - name: grafana-config
         configMap:
           name: grafana-config
-          items:
-          - key: grafana.ini
-            path: grafana.ini
-          - key: datasources.yaml
-            path: datasources/datasources.yaml
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
 ---
 apiVersion: v1
 kind: Service

@@ -1,0 +1,32 @@
+Test Applications Deployment Info
+==================================
+Namespace: testapp
+Services:        4
+Deployments:        4
+Total Pods:       11
+
+Główne serwisy:
+- frontend (entry point)
+- backend (backend service)
+- database (storage)
+
+Load Generator: 2 replicas, 50 RPS, 10 connections
+
+Dostęp:
+- Przez LoadBalancer: http:///
+- Port-forward: kubectl port-forward -n istio-system svc/istio-ingressgateway 8080:80
+
+Monitorowanie:
+- kubectl get pods -n testapp
+- kubectl logs -n testapp deployment/fortio-load-generator
+- ./test-load.sh
+
+Metryki:
+- kubectl port-forward -n testapp svc/fortio-load-generator 8080:8080
+- curl http://localhost:8080/fortio/
+
+Dostęp do Fortio UI:
+- kubectl port-forward -n testapp svc/fortio-load-generator 8080:8080
+- Otwórz: http://localhost:8080/fortio/
+
+Wdrożono: Sun Jun 15 03:05:32 CEST 2025

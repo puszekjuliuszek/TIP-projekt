@@ -47,7 +47,7 @@ Ta instrukcja pomoże utworzyć klaster EKS ręcznie przez konsolę AWS, co jest
 **Node group compute configuration:**
 - **AMI type:** `Amazon Linux 2023`
 - **Capacity type:** `On-Demand`
-- **Instance types:** `t3.medium` 
+- **Instance types:** `t3.large` 
 - **Disk size:** `20 GB`
 
 **Node group scaling configuration:**

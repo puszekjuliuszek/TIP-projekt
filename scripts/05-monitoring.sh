@@ -398,6 +398,7 @@ metadata:
 spec:
   selector:
     app: prometheus
+  type: LoadBalancer
   ports:
   - port: 9090
     targetPort: 9090
@@ -441,378 +442,51 @@ kubectl apply -f monitoring/prometheus-config.yaml
 
 # Instalacja kube-state-metrics
 echo -e "${GREEN}📊 Instaluję kube-state-metrics...${NC}"
-cat > monitoring/kube-state-metrics.yaml << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kube-state-metrics
-  namespace: ${MONITORING_NAMESPACE}
-  labels:
-    app: kube-state-metrics
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kube-state-metrics
-  template:
-    metadata:
-      labels:
-        app: kube-state-metrics
-    spec:
-      serviceAccountName: kube-state-metrics
-      containers:
-      - name: kube-state-metrics
-        image: k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.9.2
-        ports:
-        - containerPort: 8080
-          name: http-metrics
-        - containerPort: 8081
-          name: telemetry
-        resources:
-          requests:
-            cpu: 100m
-            memory: 150Mi
-          limits:
-            cpu: 200m
-            memory: 300Mi
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 5
-          timeoutSeconds: 5
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 8081
-          initialDelaySeconds: 5
-          timeoutSeconds: 5
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: kube-state-metrics
-  namespace: ${MONITORING_NAMESPACE}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: kube-state-metrics
-rules:
-- apiGroups: [""]
-  resources: ["configmaps", "secrets", "nodes", "pods", "services", "resourcequotas", "replicationcontrollers", "limitranges", "persistentvolumeclaims", "persistentvolumes", "namespaces", "endpoints"]
-  verbs: ["list", "watch"]
-- apiGroups: ["apps"]
-  resources: ["statefulsets", "daemonsets", "deployments", "replicasets"]
-  verbs: ["list", "watch"]
-- apiGroups: ["batch"]
-  resources: ["cronjobs", "jobs"]
-  verbs: ["list", "watch"]
-- apiGroups: ["autoscaling"]
-  resources: ["horizontalpodautoscalers"]
-  verbs: ["list", "watch"]
-- apiGroups: ["authentication.k8s.io"]
-  resources: ["tokenreviews"]
-  verbs: ["create"]
-- apiGroups: ["authorization.k8s.io"]
-  resources: ["subjectaccessreviews"]
-  verbs: ["create"]
-- apiGroups: ["policy"]
-  resources: ["poddisruptionbudgets"]
-  verbs: ["list", "watch"]
-- apiGroups: ["certificates.k8s.io"]
-  resources: ["certificatesigningrequests"]
-  verbs: ["list", "watch"]
-- apiGroups: ["storage.k8s.io"]
-  resources: ["storageclasses", "volumeattachments"]
-  verbs: ["list", "watch"]
-- apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
-  verbs: ["list", "watch"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["networkpolicies", "ingresses"]
-  verbs: ["list", "watch"]
-- apiGroups: ["coordination.k8s.io"]
-  resources: ["leases"]
-  verbs: ["list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: kube-state-metrics
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: kube-state-metrics
-subjects:
-- kind: ServiceAccount
-  name: kube-state-metrics
-  namespace: ${MONITORING_NAMESPACE}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kube-state-metrics
-  namespace: ${MONITORING_NAMESPACE}
-  labels:
-    app: kube-state-metrics
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
-spec:
-  selector:
-    app: kube-state-metrics
-  ports:
-  - port: 8080
-    targetPort: 8080
-    name: http-metrics
-  - port: 8081
-    targetPort: 8081
-    name: telemetry
-EOF
+kubectl apply -f configs/kube-state-metrics.yaml
 
-kubectl apply -f monitoring/kube-state-metrics.yaml
+# Pobranie dashboardów Grafany
+echo -e "${GREEN}📥 Pobieram dashboardy Grafany...${NC}"
+mkdir -p monitoring/dashboards
+curl -s https://grafana.com/api/dashboards/7639/revisions/latest/download -o monitoring/dashboards/istio-control-plane.json
+curl -s https://grafana.com/api/dashboards/15757/revisions/latest/download -o monitoring/dashboards/kubernetes-control-plane.json
 
-# Instalacja Grafana z dashboardami
-echo -e "${GREEN}📈 Instaluję Grafana z dashboardami wydajności...${NC}"
-mkdir -p monitoring/grafana-dashboards
+# Utworzenie ConfigMap dla dashboardów
+kubectl create configmap grafana-dashboards --from-file=monitoring/dashboards -n ${MONITORING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# Dashboard dla Kubernetes Control Plane
-cat > monitoring/grafana-dashboards/kubernetes-control-plane.json << 'EOF'
-{
-  "dashboard": {
-    "id": null,
-    "title": "Kubernetes Control Plane Performance",
-    "tags": ["kubernetes", "control-plane", "performance"],
-    "timezone": "browser",
-    "panels": [
-      {
-        "id": 1,
-        "title": "API Server Request Latency",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.99, rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))",
-            "legendFormat": "99th percentile"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))",
-            "legendFormat": "95th percentile"
-          },
-          {
-            "expr": "histogram_quantile(0.50, rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))",
-            "legendFormat": "50th percentile"
-          }
-        ],
-        "yAxes": [
-          {
-            "label": "Seconds",
-            "logBase": 1,
-            "max": null,
-            "min": "0"
-          }
-        ],
-        "xAxis": {
-          "show": true
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 0
-        }
-      },
-      {
-        "id": 2,
-        "title": "API Server Request Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(apiserver_request_total[5m])",
-            "legendFormat": "{{verb}} {{resource}}"
-          }
-        ],
-        "yAxes": [
-          {
-            "label": "Requests/sec",
-            "logBase": 1,
-            "max": null,
-            "min": "0"
-          }
-        ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        }
-      },
-      {
-        "id": 3,
-        "title": "etcd Request Latency",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.99, rate(etcd_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "99th percentile"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(etcd_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile"
-          }
-        ],
-        "yAxes": [
-          {
-            "label": "Seconds",
-            "logBase": 1,
-            "max": null,
-            "min": "0"
-          }
-        ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 8
-        }
-      },
-      {
-        "id": 4,
-        "title": "Scheduler Latency",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.99, rate(scheduler_scheduling_duration_seconds_bucket[5m]))",
-            "legendFormat": "99th percentile"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(scheduler_scheduling_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile"
-          }
-        ],
-        "yAxes": [
-          {
-            "label": "Seconds",
-            "logBase": 1,
-            "max": null,
-            "min": "0"
-          }
-        ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 8
-        }
-      }
-    ],
-    "time": {
-      "from": "now-1h",
-      "to": "now"
-    },
-    "refresh": "5s"
-  }
-}
-EOF
+# Usunięcie starej wersji Grafany, aby uniknąć konfliktów
+kubectl delete deployment grafana -n ${MONITORING_NAMESPACE} --ignore-not-found=true
 
-# Dashboard dla Istio Control Plane
-cat > monitoring/grafana-dashboards/istio-control-plane.json << 'EOF'
-{
-  "dashboard": {
-    "id": null,
-    "title": "Istio Control Plane Performance",
-    "tags": ["istio", "control-plane", "service-mesh"],
-    "timezone": "browser",
-    "panels": [
-      {
-        "id": 1,
-        "title": "Pilot Push Time",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.99, rate(pilot_xds_push_time_bucket[5m]))",
-            "legendFormat": "99th percentile"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(pilot_xds_push_time_bucket[5m]))",
-            "legendFormat": "95th percentile"
-          }
-        ],
-        "yAxes": [
-          {
-            "label": "Seconds",
-            "logBase": 1,
-            "max": null,
-            "min": "0"
-          }
-        ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 0
-        }
-      },
-      {
-        "id": 2,
-        "title": "Connected Proxies",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "pilot_xds_pushes",
-            "legendFormat": "XDS Pushes"
-          },
-          {
-            "expr": "pilot_xds_proxy_convergence_time",
-            "legendFormat": "Convergence Time"
-          }
-        ],
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        }
-      }
-    ],
-    "time": {
-      "from": "now-1h",
-      "to": "now"
-    },
-    "refresh": "5s"
-  }
-}
-EOF
-
-# Konfiguracja Grafana
-cat > monitoring/grafana-config.yaml << EOF
+# Konfiguracja Grafany
+cat > monitoring/grafana.yaml << EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-config
   namespace: ${MONITORING_NAMESPACE}
 data:
-  grafana.ini: |
-    [analytics]
-    check_for_updates = true
-    [grafana_net]
-    url = https://grafana.net
-    [log]
-    mode = console
-    [paths]
-    data = /var/lib/grafana/data
-    logs = /var/log/grafana
-    plugins = /var/lib/grafana/plugins
-    [server]
-    root_url = http://localhost:3000/
-  datasources.yaml: |
+  grafana.ini: |-
+    [auth.anonymous]
+    enabled = true
+    org_role = Viewer
+  datasources.yaml: |-
     apiVersion: 1
     datasources:
     - name: Prometheus
       type: prometheus
+      url: http://prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
       access: proxy
-      url: http://prometheus.monitoring.svc.cluster.local:9090
       isDefault: true
+  dashboards.yaml: |-
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /etc/grafana/provisioning/dashboards/default
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -854,8 +528,14 @@ spec:
         - mountPath: /etc/grafana/grafana.ini
           name: grafana-config
           subPath: grafana.ini
-        - mountPath: /etc/grafana/provisioning/datasources
+        - mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
           name: grafana-config
+          subPath: datasources.yaml
+        - mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+          name: grafana-config
+          subPath: dashboards.yaml
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards/default
         env:
         - name: GF_SECURITY_ADMIN_PASSWORD
           value: ${GRAFANA_PASSWORD}
@@ -867,11 +547,9 @@ spec:
       - name: grafana-config
         configMap:
           name: grafana-config
-          items:
-          - key: grafana.ini
-            path: grafana.ini
-          - key: datasources.yaml
-            path: datasources/datasources.yaml
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
 ---
 apiVersion: v1
 kind: Service
@@ -890,7 +568,7 @@ spec:
     name: http
 EOF
 
-kubectl apply -f monitoring/grafana-config.yaml
+kubectl apply -f monitoring/grafana.yaml
 
 # Oczekiwanie na uruchomienie komponentów monitorowania
 echo -e "${GREEN}⏳ Oczekuję na uruchomienie komponentów monitorowania...${NC}"
@@ -922,74 +600,94 @@ fi
 echo "📊 Grafana dostępna pod: $GRAFANA_URL (admin/admin123)"
 
 # Port-forward dla Prometheus
-kubectl port-forward -n monitoring svc/prometheus 9090:9090 &
-PROMETHEUS_PID=$!
+PROMETHEUS_IP=$(kubectl get svc prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+if [ -z "$PROMETHEUS_IP" ]; then
+    echo "⚠️  Prometheus LoadBalancer nie jest gotowy, używam port-forward..."
+    kubectl port-forward -n monitoring svc/prometheus 9090:9090 &
+    PROMETHEUS_PID=$!
+    PROMETHEUS_URL="http://localhost:9090"
+else
+    PROMETHEUS_URL="http://$PROMETHEUS_IP:9090"
+fi
 
-echo "📈 Prometheus dostępny pod: http://localhost:9090"
+echo "📈 Prometheus dostępny pod: $PROMETHEUS_URL"
 
 # Test skalowania dla sprawdzenia wydajności
 echo "🔧 Rozpoczynam test skalowania aplikacji isotope..."
 
-# Skalowanie deploymentów
-for deployment in frontend gateway auth productcatalog cart payment database cache recommendation; do
-    echo "📈 Skaluję $deployment do 10 replik..."
-    kubectl scale deployment $deployment -n isotope --replicas=10
+# Konfiguracja
+ISOTOPE_NAMESPACE="${ISOTOPE_NAMESPACE:-testapp}"
+GRAFANA_URL="$GRAFANA_URL"
+PROMETHEUS_URL="$PROMETHEUS_URL"
+
+cleanup() {
+    echo "🧹 Czyszczenie po teście..."
+    # Przywracanie pierwotnej liczby replik
+    scale_app frontend 1
+    scale_app gateway 1
+    scale_app auth 1
+    scale_app productcatalog 1
+    scale_app cart 1
+    scale_app payment 1
+    scale_app database 1
+    scale_app cache 1
+    kill $PROMETHEUS_PID
+    kill $GRAFANA_PID
+}
+
+trap cleanup EXIT
+
+scale_app() {
+    echo "📈 Skaluję $1 do $2 replik..."
+    kubectl scale deployment/$1 --replicas=$2 -n ${ISOTOPE_NAMESPACE} || echo "⚠️  Nie udało się przeskalować $1"
+}
+
+# Skalowanie w górę
+APPS="frontend gateway auth productcatalog cart payment database cache"
+for app in $APPS; do
+    scale_app $app 10
+    sleep 5 # Krótka pauza między skalowaniem
 done
 
-echo "⏳ Oczekuję 30 sekund na stabilizację..."
-sleep 30
+# Czekaj na ustabilizowanie się metryk
+echo "⏳ Czekam 60 sekund na ustabilizowanie się metryk..."
+sleep 60
 
-# Sprawdzenie metryk
 echo "📊 Sprawdzam kluczowe metryki wydajności:"
 
 echo "1. API Server Request Latency (99th percentile):"
-curl -s "http://localhost:9090/api/v1/query?query=histogram_quantile(0.99,%20rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
+curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.99,%20rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
 
 echo "2. etcd Request Latency (99th percentile):"
-curl -s "http://localhost:9090/api/v1/query?query=histogram_quantile(0.99,%20rate(etcd_request_duration_seconds_bucket[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
+curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.99,%20rate(etcd_request_duration_seconds_bucket[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
 
 echo "3. Scheduler Queue Depth:"
-curl -s "http://localhost:9090/api/v1/query?query=scheduler_pending_pods" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} pods"
+curl -s "$PROMETHEUS_URL/api/v1/query?query=scheduler_pending_pods" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} pods"
 
 echo "4. Current Running Pods:"
 kubectl get pods --all-namespaces --no-headers | grep Running | wc -l | xargs -I {} echo "   {} pods"
 
-echo "5. KWOK Fake Nodes:"
+echo "5. Current KWOK Nodes:"
 kubectl get nodes --selector=type=kwok --no-headers | wc -l | xargs -I {} echo "   {} nodes"
 
 echo "6. Istio Pilot Push Time (99th percentile):"
-curl -s "http://localhost:9090/api/v1/query?query=histogram_quantile(0.99,%20rate(pilot_xds_push_time_bucket[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
+curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.99,%20rate(pilot_xds_push_time_bucket[5m]))" | jq -r '.data.result[0].value[1] // "N/A"' | xargs -I {} echo "   {} seconds"
 
 # Skalowanie w dół
 echo "📉 Skaluję z powrotem do początkowej liczby replik..."
-for deployment in frontend gateway auth productcatalog cart payment database cache recommendation; do
-    kubectl scale deployment $deployment -n isotope --replicas=3
+for app in $APPS; do
+    scale_app $app 1
 done
 
 echo "✅ Test wydajności zakończony!"
 echo "📊 Sprawdź dashboardy Grafana: $GRAFANA_URL"
-echo "📈 Sprawdź metryki Prometheus: http://localhost:9090"
-
-# Cleanup port-forwards
-cleanup() {
-    if [ ! -z "$GRAFANA_PID" ]; then
-        kill $GRAFANA_PID 2>/dev/null || true
-    fi
-    if [ ! -z "$PROMETHEUS_PID" ]; then
-        kill $PROMETHEUS_PID 2>/dev/null || true
-    fi
-}
-
-echo "💡 Aby zatrzymać port-forwards, naciśnij Ctrl+C"
-trap cleanup EXIT
-
-# Czekaj na Ctrl+C
-wait
+echo "📈 Sprawdź metryki Prometheus: $PROMETHEUS_URL"
 EOF
 
 chmod +x performance-test.sh
 
 # Zapisanie informacji o monitorowaniu
+PROMETHEUS_LB=$(kubectl get svc prometheus -n ${MONITORING_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pending...")
 GRAFANA_LB=$(kubectl get svc grafana -n ${MONITORING_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "Pending...")
 
 cat > monitoring-info.txt << EOF
@@ -1004,7 +702,7 @@ Komponenty:
 
 Dostęp:
 - Grafana: http://$GRAFANA_LB:3000 (admin/${GRAFANA_PASSWORD})
-- Prometheus: kubectl port-forward -n ${MONITORING_NAMESPACE} svc/prometheus 9090:9090
+- Prometheus: http://$PROMETHEUS_LB:9090
 
 Kluczowe metryki monitorowane:
 - API Server latency i throughput
@@ -1041,7 +739,8 @@ echo -e "   • Grafana: $(kubectl get pods -n ${MONITORING_NAMESPACE} -l app=gr
 echo -e "   • kube-state-metrics: $(kubectl get pods -n ${MONITORING_NAMESPACE} -l app=kube-state-metrics --no-headers | grep Running | wc -l)/1 running"
 echo -e "${GREEN}🌐 Dostęp:${NC}"
 echo -e "   • Grafana: http://$GRAFANA_LB:3000 (admin/${GRAFANA_PASSWORD})"
-echo -e "   • Prometheus: http://localhost:9090 (po port-forward)"
+echo -e "   • Prometheus: http://$PROMETHEUS_LB:9090"
 echo -e "${GREEN}📁 Informacje zapisane w monitoring-info.txt${NC}"
+echo -e "${GREEN}🧪 Zrób trochę ruchu w apce jak jeszcze nie zrobiłes: ./test-load.sh${NC}"
 echo -e "${GREEN}🧪 Uruchom testy wydajności: ./performance-test.sh${NC}"
-echo -e "${GREEN}✅ Projekt gotowy do analizy wydajności!${NC}" 
+echo -e "${GREEN}✅ Projekt gotowy do analizy wydajności!${NC}"

@@ -1,0 +1,23 @@
+Istio Installation Info
+=======================
+Version: 1.19.3
+Namespace: istio-system
+Ingressgateway: Enabled (LoadBalancer)
+Automatic injection: Enabled w namespace performance-test, isotope, default
+
+Dostęp do metryk:
+- Prometheus: kubectl port-forward -n istio-system svc/prometheus 9090:9090
+- Istiod metrics: kubectl port-forward -n istio-system svc/istiod 15014:15014
+
+Sprawdzenie statusu:
+- kubectl get pods -n istio-system
+- istioctl proxy-status
+- istioctl analyze
+
+Konfiguracja:
+- Gateway: performance-gateway
+- Telemetry: Włączona z Prometheus
+- Profiling: Włączony dla Pilot
+
+Zainstalowano: Sun Jun 15 02:13:04 CEST 2025
+LoadBalancer address: 

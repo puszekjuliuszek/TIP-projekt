@@ -1,0 +1,48 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: default-metrics
+  namespace: istio-system
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        destination_service_name:
+          value: "{{.destination_service_name | default \"unknown\"}}"
+        destination_service_namespace:
+          value: "{{.destination_service_namespace | default \"unknown\"}}"
+        source_app:
+          value: "{{.source_app | default \"unknown\"}}"
+        destination_app:
+          value: "{{.destination_app | default \"unknown\"}}"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: access-logging
+  namespace: istio-system
+spec:
+  accessLogging:
+  - providers:
+    - name: otel
+---
+# Gateway dla dostępu do aplikacji
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: performance-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"

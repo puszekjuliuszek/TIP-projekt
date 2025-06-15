@@ -17,7 +17,7 @@ REPLICAS_PER_SERVICE="${REPLICAS_PER_SERVICE:-3}"
 # Zastąpmy Isotope na Fortio - oficjalny load generator Istio
 FORTIO_IMAGE="fortio/fortio:latest"
 
-echo -e "${GREEN}🚀 Rozpoczynam wdrożenie aplikacji testowych...${NC}"
+echo -e "${GREEN}🚀 Rozpoczynam wdrażanie aplikacji testowych...${NC}"
 
 # Sprawdź czy klaster jest dostępny
 if ! kubectl cluster-info &>/dev/null; then
@@ -48,8 +48,9 @@ create_test_service() {
     local replicas=$2
     local cpu_request=$3
     local memory_request=$4
-    
-    cat << EOF | kubectl apply -f -
+    local image=${5:-"httpd:2.4"}
+
+    cat > configs/services/${service_name}.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,7 +73,7 @@ spec:
     spec:
       containers:
       - name: ${service_name}
-        image: nginx:alpine
+        image: ${image}
         ports:
         - containerPort: 80
           name: http
@@ -111,14 +112,41 @@ spec:
     targetPort: 80
     name: http
 EOF
+
+    kubectl apply -f configs/services/${service_name}.yaml
 }
+
+# Funkcja do sprawdzania statusu deploymentu z diagnostyką
+wait_for_deployment() {
+    local service=$1
+    local ns=$2
+    echo -e "${GREEN}⏳ Oczekuję na $service...${NC}"
+    if ! kubectl wait --for=condition=available --timeout=300s deployment/$service -n $ns; then
+        echo -e "${RED}❌ Deployment $service nie jest gotowy w wyznaczonym czasie.${NC}"
+        echo -e "${YELLOW}🔎 Sprawdzam status podów dla deploymentu $service...${NC}"
+        kubectl get pods -n $ns -l app=$service
+        echo -e "${YELLOW}🔎 Opisuję pody dla deploymentu $service...${NC}"
+        POD_NAME=$(kubectl get pods -n $ns -l app=$service -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+        if [ -n "$POD_NAME" ]; then
+            kubectl describe pod $POD_NAME -n $ns
+            echo -e "${YELLOW}🔎 Logi z poda $POD_NAME...${NC}"
+            kubectl logs $POD_NAME -n $ns --tail=50
+        else
+            echo -e "${RED}Nie znaleziono podów dla deploymentu $service.${NC}"
+        fi
+        exit 1
+    fi
+}
+
+# Utworzenie katalogu na konfiguracje, jeśli nie istnieje
+mkdir -p configs/services
 
 # Tworzenie aplikacji testowych
 echo -e "${GREEN}🏗️  Tworzę aplikacje testowe...${NC}"
 
 create_test_service "frontend" ${REPLICAS_PER_SERVICE} "100m" "128Mi"
 create_test_service "backend" ${REPLICAS_PER_SERVICE} "200m" "256Mi"
-create_test_service "database" $((REPLICAS_PER_SERVICE + 1)) "300m" "512Mi"
+create_test_service "database" ${REPLICAS_PER_SERVICE} "100m" "128Mi"
 
 # Load generator z Fortio
 echo -e "${GREEN}⚡ Tworzę Fortio load generator...${NC}"
@@ -291,65 +319,70 @@ EOF
 
 kubectl apply -f configs/isotope-virtualservices.yaml
 
-# Fortio monitoring - podstawowe metryki
-echo -e "${GREEN}📊 Konfiguruję monitorowanie Fortio...${NC}"
-echo "Fortio dostarcza wbudowane metryki przez /fortio/ endpoint"
-echo "Fortio logs: kubectl logs -n ${ISOTOPE_NAMESPACE} deployment/fortio-load-generator"
-
 # Oczekiwanie na uruchomienie aplikacji
 echo -e "${GREEN}⏳ Oczekuję na uruchomienie aplikacji...${NC}"
 echo -e "${YELLOW}To może potrwać kilka minut...${NC}"
 
-# Sprawdzenie statusu deploymentów
-services=("frontend" "backend" "database")
-
-for service in "${services[@]}"; do
-    echo -e "${YELLOW}⏳ Oczekuję na ${service}...${NC}"
-    kubectl wait --for=condition=available deployment/${service} -n ${ISOTOPE_NAMESPACE} --timeout=300s
+for service in frontend backend database; do
+    wait_for_deployment $service ${ISOTOPE_NAMESPACE}
 done
+
+echo -e "${GREEN}✅ Aplikacje testowe zostały wdrożone i są gotowe!${NC}"
 
 # Oczekiwanie na load generator
 echo -e "${YELLOW}⏳ Oczekuję na load generator...${NC}"
-kubectl wait --for=condition=available deployment/fortio-load-generator -n ${ISOTOPE_NAMESPACE} --timeout=300s
+wait_for_deployment "fortio-load-generator" ${ISOTOPE_NAMESPACE}
 
 # Sprawdzenie statusu podów
 echo -e "${GREEN}✅ Sprawdzam status wszystkich podów...${NC}"
 kubectl get pods -n ${ISOTOPE_NAMESPACE}
 
-# Test connectivity przez Istio gateway
-echo -e "${GREEN}🔗 Testuję połączenie przez Istio gateway...${NC}"
-GATEWAY_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "localhost")
-echo "Gateway IP/hostname: $GATEWAY_IP"
+echo -e "${GREEN}✅ Aplikacje testowe i load generator są gotowe!${NC}"
+
+# Fortio monitoring - podstawowe metryki
+echo -e "${GREEN}📊 Konfiguruję monitorowanie Fortio...${NC}"
+echo "Fortio dostarcza wbudowane metryki przez /fortio/ endpoint"
+echo "Fortio logs: kubectl logs -n ${ISOTOPE_NAMESPACE} deployment/fortio-load-generator"
 
 # Tworzenie skryptu do testowania obciążenia z Fortio
 cat > test-load.sh << 'EOF'
 #!/bin/bash
+
+# Konfiguracja
+ISOTOPE_NAMESPACE="${ISOTOPE_NAMESPACE:-testapp}"
+GATEWAY_URL=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "localhost")
+
 echo "🚀 Rozpoczynam test obciążenia z Fortio..."
 
-# Test dostępności serwisów
+# Sprawdzenie dostępności serwisów
 echo "📊 Test dostępności serwisów..."
 echo "Frontend: http://frontend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80"
 echo "Backend: http://backend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80"
 echo "Database: http://database.${ISOTOPE_NAMESPACE}.svc.cluster.local:80"
 
-# Test przez load generator
+# Znalezienie poda Fortio
+FORTIO_POD=$(kubectl get pods -n ${ISOTOPE_NAMESPACE} -l app=fortio-load-generator -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+if [ -z "$FORTIO_POD" ]; then
+    echo "❌ Błąd: Nie znaleziono poda Fortio load generator w namespace ${ISOTOPE_NAMESPACE}."
+    exit 1
+fi
+
 echo "🎯 Uruchamiam test obciążenia..."
-kubectl exec -n ${ISOTOPE_NAMESPACE} deployment/fortio-load-generator -- fortio load \
-  -c 8 -qps 50 -t 30s -loglevel Info \
-  http://frontend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80/
+kubectl exec ${FORTIO_POD} -n ${ISOTOPE_NAMESPACE} -c fortio -- fortio load -qps 10 -t 60s -c 5 "http://frontend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80"
 
 echo "📈 Test backend..."
-kubectl exec -n ${ISOTOPE_NAMESPACE} deployment/fortio-load-generator -- fortio load \
-  -c 4 -qps 25 -t 30s -loglevel Info \
-  http://backend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80/
+kubectl exec ${FORTIO_POD} -n ${ISOTOPE_NAMESPACE} -c fortio -- fortio load -qps 5 -t 30s -c 3 "http://backend.${ISOTOPE_NAMESPACE}.svc.cluster.local:80"
 
 echo "📊 Raport z testów:"
-kubectl exec -n ${ISOTOPE_NAMESPACE} deployment/fortio-load-generator -- fortio report
+kubectl exec ${FORTIO_POD} -n ${ISOTOPE_NAMESPACE} -c fortio -- fortio report
 
 echo "✅ Test zakończony"
 EOF
 
 chmod +x test-load.sh
+
+echo -e "${GREEN}✅ Utworzono skrypt test-load.sh do generowania obciążenia.${NC}"
 
 # Zapisanie informacji o wdrożeniu
 cat > testapp-info.txt << EOF

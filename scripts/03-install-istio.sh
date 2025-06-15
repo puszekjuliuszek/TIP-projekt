@@ -120,10 +120,14 @@ kubectl get pods -n ${ISTIO_NAMESPACE}
 
 # Włączenie automatic sidecar injection dla namespace performance-test
 echo -e "${GREEN}💉 Włączam automatic sidecar injection...${NC}"
+
+# Utworzenie i oznaczenie namespace'ów
+kubectl create namespace performance-test 2>/dev/null || echo "Namespace 'performance-test' already exists."
 kubectl label namespace performance-test istio-injection=enabled --overwrite
+
 kubectl label namespace default istio-injection=enabled --overwrite
 
-# Tworzenie namespace dla aplikacji isotope
+# Utworzenie namespace dla aplikacji isotope
 kubectl create namespace isotope --dry-run=client -o yaml | kubectl apply -f -
 kubectl label namespace isotope istio-injection=enabled --overwrite
 

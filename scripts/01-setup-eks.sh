@@ -10,10 +10,10 @@ NC='\033[0m' # No Color
 
 # Konfiguracja
 CLUSTER_NAME="${CLUSTER_NAME:-kwok-performance-test}"
-REGION="${AWS_REGION:-us-west-2}"
-NODE_GROUP_NAME="${NODE_GROUP_NAME:-primary-nodes}"
-INSTANCE_TYPE="${INSTANCE_TYPE:-m5.large}"
-NODE_COUNT="${NODE_COUNT:-3}"
+REGION="${AWS_REGION:-eu-central-1}"
+NODE_GROUP_NAME="${NODE_GROUP_NAME:-standard-workers}"
+INSTANCE_TYPE="${INSTANCE_TYPE:-t3.large}"
+NODE_COUNT="${NODE_COUNT:-2}"
 
 echo -e "${GREEN}🚀 Rozpoczynam instalację klastra EKS...${NC}"
 
@@ -90,7 +90,7 @@ kind: ClusterConfig
 metadata:
   name: ${CLUSTER_NAME}
   region: ${REGION}
-  version: "1.27"
+  version: "1.28"
 
 # Konfiguracja control plane będzie automatyczna
 

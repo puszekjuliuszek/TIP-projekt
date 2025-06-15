@@ -197,15 +197,6 @@ echo "Aby zatrzymać, naciśnij Ctrl+C"
 kubectl port-forward -n monitoring svc/grafana 3000:3000
 EOF
 
-# Prometheus port-forward
-cat > start-prometheus.sh << 'EOF'
-#!/bin/bash
-echo "🚀 Uruchamiam port-forward dla Prometheus..."
-echo "Prometheus będzie dostępny pod: http://localhost:9090"
-echo "Aby zatrzymać, naciśnij Ctrl+C"
-kubectl port-forward -n monitoring svc/prometheus 9090:9090
-EOF
-
 # Test app port-forward
 cat > start-testapp.sh << 'EOF'
 #!/bin/bash
