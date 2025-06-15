@@ -84,7 +84,7 @@ if check_step_status "KWOK Controller" "kubectl get pods -n kube-system -l app=k
     
     # Tworzenie fake nodes
     echo -e "${GREEN}🖥️  Tworzę fake nodes...${NC}"
-    # ./create-fake-nodes.sh
+    ./create-fake-nodes.sh
     
     echo -e "${GREEN}📊 Fake nodes: $(kubectl get nodes --selector=type=kwok --no-headers | wc -l)${NC}"
 else
