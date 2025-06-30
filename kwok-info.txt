@@ -17,7 +17,7 @@ Sprawdzenie statusu:
 Port-forward dla metryk:
 kubectl port-forward -n kube-system service/kwok-controller 10247:10247
 
-Zainstalowano: Sun Jun 15 02:00:46 CEST 2025
+Zainstalowano: Mon Jun 30 01:37:00 PM CEST 2025
 
 📚 Kolejne kroki:
 1. Utwórz fake nodes: ./create-fake-nodes.sh

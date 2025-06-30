@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: 'kwok dashboards'
+    orgId: 1
+    folder: 'KWOK Monitoring'
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
+      allowUiUpdates: true

@@ -26,6 +26,9 @@ data:
     - job_name: 'kubernetes-apiservers'
       kubernetes_sd_configs:
       - role: endpoints
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -44,6 +47,9 @@ data:
     - job_name: 'kubernetes-nodes'
       kubernetes_sd_configs:
       - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -63,6 +69,9 @@ data:
     - job_name: 'kubernetes-cadvisor'
       kubernetes_sd_configs:
       - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -82,11 +91,13 @@ data:
         regex: 'container_cpu_usage_seconds_total|container_memory_usage_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total'
         action: keep
 
-    # Kubernetes service discovery untuk endpoints
+    # Kubernetes service discovery pentru endpoints
     - job_name: 'kubernetes-service-endpoints'
       kubernetes_sd_configs:
       - role: endpoints
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
         action: keep
         regex: true
@@ -120,6 +131,8 @@ data:
           names:
           - istio-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: istiod;http-monitoring
@@ -145,6 +158,8 @@ data:
           names:
           - kube-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: kwok-controller-metrics-service;metrics
@@ -157,6 +172,8 @@ data:
           names:
           - kube-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: kube-dns;metrics
@@ -176,6 +193,8 @@ data:
           names:
           - monitoring
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name]
         action: keep
         regex: node-exporter

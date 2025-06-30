@@ -21,6 +21,16 @@ if ! kubectl cluster-info &>/dev/null; then
     exit 1
 fi
 
+# Oznaczanie nodów
+echo -e "${GREEN}🏷️ Oznaczam nody jako simulation=fake|real dla KWOK...${NC}"
+for node in $(kubectl get nodes -o name | sed 's|node/||'); do
+  if [[ "$node" == *kwok* ]]; then
+    kubectl label node "$node" simulation=fake --overwrite
+  else
+    kubectl label node "$node" simulation=real --overwrite
+  fi
+done
+
 # Tworzenie namespace dla monitorowania
 echo -e "${GREEN}📦 Tworzę namespace dla monitorowania...${NC}"
 kubectl create namespace ${MONITORING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
@@ -56,6 +66,9 @@ data:
     - job_name: 'kubernetes-apiservers'
       kubernetes_sd_configs:
       - role: endpoints
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -74,6 +87,9 @@ data:
     - job_name: 'kubernetes-nodes'
       kubernetes_sd_configs:
       - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -93,6 +109,9 @@ data:
     - job_name: 'kubernetes-cadvisor'
       kubernetes_sd_configs:
       - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       scheme: https
       tls_config:
         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -112,11 +131,13 @@ data:
         regex: 'container_cpu_usage_seconds_total|container_memory_usage_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total'
         action: keep
 
-    # Kubernetes service discovery untuk endpoints
+    # Kubernetes service discovery pentru endpoints
     - job_name: 'kubernetes-service-endpoints'
       kubernetes_sd_configs:
       - role: endpoints
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
         action: keep
         regex: true
@@ -150,6 +171,8 @@ data:
           names:
           - istio-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: istiod;http-monitoring
@@ -175,6 +198,8 @@ data:
           names:
           - kube-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: kwok-controller-metrics-service;metrics
@@ -187,6 +212,8 @@ data:
           names:
           - kube-system
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
         action: keep
         regex: kube-dns;metrics
@@ -206,6 +233,8 @@ data:
           names:
           - ${MONITORING_NAMESPACE}
       relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
       - source_labels: [__meta_kubernetes_service_name]
         action: keep
         regex: node-exporter
@@ -476,6 +505,18 @@ data:
       url: http://prometheus.${MONITORING_NAMESPACE}.svc.cluster.local:9090
       access: proxy
       isDefault: true
+      uid: prometheus-main
+  kwok-dashboards.yaml: |-
+    apiVersion: 1
+    providers:
+    - name: 'kwok-dashboards'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards
   dashboards.yaml: |-
     apiVersion: 1
     providers:
@@ -731,6 +772,12 @@ Sprawdzanie statusu:
 
 Konfigurowano: $(date)
 EOF
+
+# ✅ DODANE: Wskazówki do Grafany
+echo -e "${YELLOW}📈 Możesz teraz użyć następujących zapytań w Grafanie:${NC}"
+echo -e "${YELLOW}▶ Rozkład podów na nodach: count by(node) (kube_pod_info)${NC}"
+echo -e "${YELLOW}▶ CPU per simulation type: sum by(node_label_simulation) (rate(container_cpu_usage_seconds_total[5m]))${NC}"
+echo -e "${YELLOW}▶ Ruch Istio po typie noda: sum by(node_label_simulation) (rate(istio_requests_total[5m]))${NC}"
 
 echo -e "${GREEN}🎉 Zaawansowane monitorowanie zostało skonfigurowane!${NC}"
 echo -e "${GREEN}📊 Status:${NC}"

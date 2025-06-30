@@ -35,7 +35,7 @@
       "version": ""
     }
   ],
-  "description": "Istio Mesh Dashboard version 1.26.1",
+  "description": "Istio Mesh Dashboard version 1.26.2",
   "graphTooltip": 1,
   "panels": [
     {

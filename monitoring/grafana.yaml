@@ -16,6 +16,18 @@ data:
       url: http://prometheus.monitoring.svc.cluster.local:9090
       access: proxy
       isDefault: true
+      uid: prometheus-main
+  kwok-dashboards.yaml: |-
+    apiVersion: 1
+    providers:
+    - name: 'kwok-dashboards'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards
   dashboards.yaml: |-
     apiVersion: 1
     providers:
