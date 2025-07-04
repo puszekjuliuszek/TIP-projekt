@@ -29,4 +29,4 @@ Dostęp do Fortio UI:
 - kubectl port-forward -n testapp svc/fortio-load-generator 8080:8080
 - Otwórz: http://localhost:8080/fortio/
 
-Wdrożono: Mon Jun 30 01:40:59 PM CEST 2025
+Wdrożono: Thu Jul  3 08:04:07 PM CEST 2025

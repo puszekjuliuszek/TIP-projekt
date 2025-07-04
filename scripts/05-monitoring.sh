@@ -36,436 +36,436 @@ echo -e "${GREEN}📦 Tworzę namespace dla monitorowania...${NC}"
 kubectl create namespace ${MONITORING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
 # Konfiguracja rozszerzonego Prometheus
-echo -e "${GREEN}📊 Konfiguruję rozszerzony Prometheus dla metryk control plane...${NC}"
-cat > monitoring/prometheus-config.yaml << EOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-config
-  namespace: ${MONITORING_NAMESPACE}
-data:
-  prometheus.yml: |
-    global:
-      scrape_interval: 15s
-      evaluation_interval: 15s
-      external_labels:
-        cluster: 'kwok-performance-test'
-        region: 'aws-eks'
+# echo -e "${GREEN}📊 Konfiguruję rozszerzony Prometheus dla metryk control plane...${NC}"
+# cat > monitoring/prometheus-config.yaml << EOF
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: prometheus-config
+#   namespace: ${MONITORING_NAMESPACE}
+# data:
+#   prometheus.yml: |
+#     global:
+#       scrape_interval: 15s
+#       evaluation_interval: 15s
+#       external_labels:
+#         cluster: 'kwok-performance-test'
+#         region: 'aws-eks'
     
-    rule_files:
-    - "/etc/prometheus/rules/*.yml"
+#     rule_files:
+#     - "/etc/prometheus/rules/*.yml"
     
-    alerting:
-      alertmanagers:
-      - static_configs:
-        - targets:
-          - alertmanager:9093
+#     alerting:
+#       alertmanagers:
+#       - static_configs:
+#         - targets:
+#           - alertmanager:9093
     
-    scrape_configs:
-    # Kubernetes API Server
-    - job_name: 'kubernetes-apiservers'
-      kubernetes_sd_configs:
-      - role: endpoints
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      scheme: https
-      tls_config:
-        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        insecure_skip_verify: true
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-      relabel_configs:
-      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-        action: keep
-        regex: default;kubernetes;https
-      metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: 'apiserver_request_duration_seconds.*|apiserver_request_total|apiserver_current_inflight_requests|etcd_request_duration_seconds.*|etcd_object_counts|process_cpu_seconds_total|process_resident_memory_bytes'
-        action: keep
+#     scrape_configs:
+#     # Kubernetes API Server
+#     - job_name: 'kubernetes-apiservers'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       scheme: https
+#       tls_config:
+#         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+#         insecure_skip_verify: true
+#       bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+#       relabel_configs:
+#       - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+#         action: keep
+#         regex: default;kubernetes;https
+#       metric_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'apiserver_request_duration_seconds.*|apiserver_request_total|apiserver_current_inflight_requests|etcd_request_duration_seconds.*|etcd_object_counts|process_cpu_seconds_total|process_resident_memory_bytes'
+#         action: keep
 
-    # Kubelet metrics
-    - job_name: 'kubernetes-nodes'
-      kubernetes_sd_configs:
-      - role: node
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      scheme: https
-      tls_config:
-        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        insecure_skip_verify: true
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - target_label: __address__
-        replacement: kubernetes.default.svc:443
-      - source_labels: [__meta_kubernetes_node_name]
-        regex: (.+)
-        target_label: __metrics_path__
-        replacement: /api/v1/nodes/\${1}/proxy/metrics
+#     # Kubelet metrics
+#     - job_name: 'kubernetes-nodes'
+#       kubernetes_sd_configs:
+#       - role: node
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       scheme: https
+#       tls_config:
+#         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+#         insecure_skip_verify: true
+#       bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - target_label: __address__
+#         replacement: kubernetes.default.svc:443
+#       - source_labels: [__meta_kubernetes_node_name]
+#         regex: (.+)
+#         target_label: __metrics_path__
+#         replacement: /api/v1/nodes/\${1}/proxy/metrics
 
-    # Kubelet cAdvisor metrics
-    - job_name: 'kubernetes-cadvisor'
-      kubernetes_sd_configs:
-      - role: node
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      scheme: https
-      tls_config:
-        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        insecure_skip_verify: true
-      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - target_label: __address__
-        replacement: kubernetes.default.svc:443
-      - source_labels: [__meta_kubernetes_node_name]
-        regex: (.+)
-        target_label: __metrics_path__
-        replacement: /api/v1/nodes/\${1}/proxy/metrics/cadvisor
-      metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: 'container_cpu_usage_seconds_total|container_memory_usage_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total'
-        action: keep
+#     # Kubelet cAdvisor metrics
+#     - job_name: 'kubernetes-cadvisor'
+#       kubernetes_sd_configs:
+#       - role: node
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       scheme: https
+#       tls_config:
+#         ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+#         insecure_skip_verify: true
+#       bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - target_label: __address__
+#         replacement: kubernetes.default.svc:443
+#       - source_labels: [__meta_kubernetes_node_name]
+#         regex: (.+)
+#         target_label: __metrics_path__
+#         replacement: /api/v1/nodes/\${1}/proxy/metrics/cadvisor
+#       metric_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'container_cpu_usage_seconds_total|container_memory_usage_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total'
+#         action: keep
 
-    # Kubernetes service discovery pentru endpoints
-    - job_name: 'kubernetes-service-endpoints'
-      kubernetes_sd_configs:
-      - role: endpoints
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
-        action: keep
-        regex: true
-      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
-        action: replace
-        target_label: __scheme__
-        regex: (https?)
-      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
-        action: replace
-        target_label: __metrics_path__
-        regex: (.+)
-      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
-        action: replace
-        target_label: __address__
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-      - action: labelmap
-        regex: __meta_kubernetes_service_label_(.+)
-      - source_labels: [__meta_kubernetes_namespace]
-        action: replace
-        target_label: kubernetes_namespace
-      - source_labels: [__meta_kubernetes_service_name]
-        action: replace
-        target_label: kubernetes_name
+#     # Kubernetes service discovery pentru endpoints
+#     - job_name: 'kubernetes-service-endpoints'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+#         action: keep
+#         regex: true
+#       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+#         action: replace
+#         target_label: __scheme__
+#         regex: (https?)
+#       - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+#         action: replace
+#         target_label: __metrics_path__
+#         regex: (.+)
+#       - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+#         action: replace
+#         target_label: __address__
+#         regex: ([^:]+)(?::\d+)?;(\d+)
+#         replacement: \$1:\$2
+#       - action: labelmap
+#         regex: __meta_kubernetes_service_label_(.+)
+#       - source_labels: [__meta_kubernetes_namespace]
+#         action: replace
+#         target_label: kubernetes_namespace
+#       - source_labels: [__meta_kubernetes_service_name]
+#         action: replace
+#         target_label: kubernetes_name
 
-    # Istio control plane metrics
-    - job_name: 'istiod'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - istio-system
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-        action: keep
-        regex: istiod;http-monitoring
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
-      - action: labelmap
-        regex: __meta_kubernetes_service_label_(.+)
-      - source_labels: [__meta_kubernetes_namespace]
-        action: replace
-        target_label: namespace
-      - source_labels: [__meta_kubernetes_service_name]
-        action: replace
-        target_label: service
+#     # Istio control plane metrics
+#     - job_name: 'istiod'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#         namespaces:
+#           names:
+#           - istio-system
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+#         action: keep
+#         regex: istiod;http-monitoring
+#       - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
+#         action: replace
+#         regex: ([^:]+)(?::\d+)?;(\d+)
+#         replacement: \$1:\$2
+#         target_label: __address__
+#       - action: labelmap
+#         regex: __meta_kubernetes_service_label_(.+)
+#       - source_labels: [__meta_kubernetes_namespace]
+#         action: replace
+#         target_label: namespace
+#       - source_labels: [__meta_kubernetes_service_name]
+#         action: replace
+#         target_label: service
 
-    # KWOK controller metrics
-    - job_name: 'kwok-controller'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - kube-system
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-        action: keep
-        regex: kwok-controller-metrics-service;metrics
+#     # KWOK controller metrics
+#     - job_name: 'kwok-controller'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#         namespaces:
+#           names:
+#           - kube-system
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+#         action: keep
+#         regex: kwok-controller-metrics-service;metrics
 
-    # CoreDNS metrics
-    - job_name: 'coredns'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - kube-system
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-        action: keep
-        regex: kube-dns;metrics
+#     # CoreDNS metrics
+#     - job_name: 'coredns'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#         namespaces:
+#           names:
+#           - kube-system
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+#         action: keep
+#         regex: kube-dns;metrics
 
-    # kube-state-metrics
-    - job_name: 'kube-state-metrics'
-      static_configs:
-      - targets:
-        - kube-state-metrics:8080
-        - kube-state-metrics:8081
+#     # kube-state-metrics
+#     - job_name: 'kube-state-metrics'
+#       static_configs:
+#       - targets:
+#         - kube-state-metrics:8080
+#         - kube-state-metrics:8081
 
-    # Node exporter
-    - job_name: 'node-exporter'
-      kubernetes_sd_configs:
-      - role: endpoints
-        namespaces:
-          names:
-          - ${MONITORING_NAMESPACE}
-      relabel_configs:
-      - action: labelmap
-        regex: __meta_kubernetes_node_label_(.+)
-      - source_labels: [__meta_kubernetes_service_name]
-        action: keep
-        regex: node-exporter
-      - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
-        action: replace
-        regex: ([^:]+)(?::\d+)?;(\d+)
-        replacement: \$1:\$2
-        target_label: __address__
+#     # Node exporter
+#     - job_name: 'node-exporter'
+#       kubernetes_sd_configs:
+#       - role: endpoints
+#         namespaces:
+#           names:
+#           - ${MONITORING_NAMESPACE}
+#       relabel_configs:
+#       - action: labelmap
+#         regex: __meta_kubernetes_node_label_(.+)
+#       - source_labels: [__meta_kubernetes_service_name]
+#         action: keep
+#         regex: node-exporter
+#       - source_labels: [__address__, __meta_kubernetes_endpoint_port_number]
+#         action: replace
+#         regex: ([^:]+)(?::\d+)?;(\d+)
+#         replacement: \$1:\$2
+#         target_label: __address__
 
-    # Isotope aplikacje
-    # - job_name: 'isotope-services'
-    #   kubernetes_sd_configs:
-    #   - role: endpoints
-    #     namespaces:
-    #       names:
-    #       - ${ISOTOPE_NAMESPACE}
-    #   relabel_configs:
-    #   - source_labels: [__meta_kubernetes_service_name]
-    #     action: keep
-    #     regex: (frontend|gateway|auth|productcatalog|cart|payment|database|cache|recommendation)
-    #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-    #     action: keep
-    #     regex: true
-    #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-    #     action: replace
-    #     target_label: __metrics_path__
-    #     regex: (.+)
-    #   - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-    #     action: replace
-    #     regex: ([^:]+)(?::\d+)?;(\d+)
-    #     replacement: \$1:\$2
-    #     target_label: __address__
-    #   - action: labelmap
-    #     regex: __meta_kubernetes_service_label_(.+)
-    #   - source_labels: [__meta_kubernetes_namespace]
-    #     action: replace
-    #     target_label: namespace
-    #   - source_labels: [__meta_kubernetes_service_name]
-    #     action: replace
-    #     target_label: service
+#     # Isotope aplikacje
+#     # - job_name: 'isotope-services'
+#     #   kubernetes_sd_configs:
+#     #   - role: endpoints
+#     #     namespaces:
+#     #       names:
+#     #       - ${ISOTOPE_NAMESPACE}
+#     #   relabel_configs:
+#     #   - source_labels: [__meta_kubernetes_service_name]
+#     #     action: keep
+#     #     regex: (frontend|gateway|auth|productcatalog|cart|payment|database|cache|recommendation)
+#     #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+#     #     action: keep
+#     #     regex: true
+#     #   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+#     #     action: replace
+#     #     target_label: __metrics_path__
+#     #     regex: (.+)
+#     #   - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+#     #     action: replace
+#     #     regex: ([^:]+)(?::\d+)?;(\d+)
+#     #     replacement: \$1:\$2
+#     #     target_label: __address__
+#     #   - action: labelmap
+#     #     regex: __meta_kubernetes_service_label_(.+)
+#     #   - source_labels: [__meta_kubernetes_namespace]
+#     #     action: replace
+#     #     target_label: namespace
+#     #   - source_labels: [__meta_kubernetes_service_name]
+#     #     action: replace
+#     #     target_label: service
 
-  # Alerting rules dla control plane
-  alerts.yml: |
-    groups:
-    - name: kubernetes-control-plane
-      rules:
-      - alert: KubernetesApiServerDown
-        expr: up{job="kubernetes-apiservers"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Kubernetes API server is down"
-          description: "Kubernetes API server has been down for more than 5 minutes."
+#   # Alerting rules dla control plane
+#   alerts.yml: |
+#     groups:
+#     - name: kubernetes-control-plane
+#       rules:
+#       - alert: KubernetesApiServerDown
+#         expr: up{job="kubernetes-apiservers"} == 0
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Kubernetes API server is down"
+#           description: "Kubernetes API server has been down for more than 5 minutes."
 
-      - alert: KubernetesApiServerHighLatency
-        expr: histogram_quantile(0.99, rate(apiserver_request_duration_seconds_bucket{verb!="WATCH"}[5m])) > 1
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Kubernetes API server high latency"
-          description: "Kubernetes API server 99th percentile latency is {{ \$value }} seconds"
+#       - alert: KubernetesApiServerHighLatency
+#         expr: histogram_quantile(0.99, rate(apiserver_request_duration_seconds_bucket{verb!="WATCH"}[5m])) > 1
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Kubernetes API server high latency"
+#           description: "Kubernetes API server 99th percentile latency is {{ \$value }} seconds"
 
-      - alert: EtcdHighLatency
-        expr: histogram_quantile(0.99, rate(etcd_request_duration_seconds_bucket[5m])) > 0.5
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "etcd high latency"
-          description: "etcd 99th percentile latency is {{ \$value }} seconds"
+#       - alert: EtcdHighLatency
+#         expr: histogram_quantile(0.99, rate(etcd_request_duration_seconds_bucket[5m])) > 0.5
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "etcd high latency"
+#           description: "etcd 99th percentile latency is {{ \$value }} seconds"
 
-      - alert: KubeControllerManagerDown
-        expr: up{job="kube-controller-manager"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Kube Controller Manager is down"
+#       - alert: KubeControllerManagerDown
+#         expr: up{job="kube-controller-manager"} == 0
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Kube Controller Manager is down"
 
-      - alert: KubeSchedulerDown
-        expr: up{job="kube-scheduler"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Kube Scheduler is down"
+#       - alert: KubeSchedulerDown
+#         expr: up{job="kube-scheduler"} == 0
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Kube Scheduler is down"
 
-      - alert: CoreDNSDown
-        expr: up{job="coredns"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "CoreDNS is down"
+#       - alert: CoreDNSDown
+#         expr: up{job="coredns"} == 0
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "CoreDNS is down"
 
-    - name: istio-control-plane
-      rules:
-      - alert: IstioPilotDown
-        expr: up{job="istiod"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Istio Pilot is down"
+#     - name: istio-control-plane
+#       rules:
+#       - alert: IstioPilotDown
+#         expr: up{job="istiod"} == 0
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Istio Pilot is down"
 
-      - alert: IstioPilotHighPushTime
-        expr: histogram_quantile(0.99, rate(pilot_xds_push_time_bucket[5m])) > 10
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Istio Pilot high push time"
-          description: "Istio Pilot 99th percentile push time is {{ \$value }} seconds"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus
-  namespace: ${MONITORING_NAMESPACE}
-  labels:
-    app: prometheus
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
-        app: prometheus
-    spec:
-      serviceAccountName: prometheus
-      containers:
-      - name: prometheus
-        image: prom/prometheus:v2.45.0
-        args:
-        - '--config.file=/etc/prometheus/prometheus.yml'
-        - '--storage.tsdb.path=/prometheus'
-        - '--web.console.libraries=/etc/prometheus/console_libraries'
-        - '--web.console.templates=/etc/prometheus/consoles'
-        - '--storage.tsdb.retention.time=24h'
-        - '--web.enable-lifecycle'
-        - '--web.enable-admin-api'
-        - '--storage.tsdb.max-block-duration=2h'
-        - '--storage.tsdb.min-block-duration=2h'
-        - '--web.enable-remote-write-receiver'
-        ports:
-        - containerPort: 9090
-          name: web
-        resources:
-          requests:
-            cpu: 100m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
-        volumeMounts:
-        - name: config
-          mountPath: /etc/prometheus
-        - name: storage
-          mountPath: /prometheus
-        - name: rules
-          mountPath: /etc/prometheus/rules
-      volumes:
-      - name: config
-        configMap:
-          name: prometheus-config
-      - name: storage
-        emptyDir:
-          sizeLimit: 5Gi
-      - name: rules
-        configMap:
-          name: prometheus-config
-          items:
-          - key: alerts.yml
-            path: alerts.yml
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-  namespace: ${MONITORING_NAMESPACE}
-  labels:
-    app: prometheus
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "9090"
-spec:
-  selector:
-    app: prometheus
-  type: LoadBalancer
-  ports:
-  - port: 9090
-    targetPort: 9090
-    name: web
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: prometheus
-  namespace: ${MONITORING_NAMESPACE}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: prometheus
-rules:
-- apiGroups: [""]
-  resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["extensions", "apps"]
-  resources: ["deployments", "replicasets"]
-  verbs: ["get", "list", "watch"]
-- nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
-  verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: prometheus
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: prometheus
-subjects:
-- kind: ServiceAccount
-  name: prometheus
-  namespace: ${MONITORING_NAMESPACE}
-EOF
+#       - alert: IstioPilotHighPushTime
+#         expr: histogram_quantile(0.99, rate(pilot_xds_push_time_bucket[5m])) > 10
+#         for: 10m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Istio Pilot high push time"
+#           description: "Istio Pilot 99th percentile push time is {{ \$value }} seconds"
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: prometheus
+#   namespace: ${MONITORING_NAMESPACE}
+#   labels:
+#     app: prometheus
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: prometheus
+#   template:
+#     metadata:
+#       labels:
+#         app: prometheus
+#     spec:
+#       serviceAccountName: prometheus
+#       containers:
+#       - name: prometheus
+#         image: prom/prometheus:v2.45.0
+#         args:
+#         - '--config.file=/etc/prometheus/prometheus.yml'
+#         - '--storage.tsdb.path=/prometheus'
+#         - '--web.console.libraries=/etc/prometheus/console_libraries'
+#         - '--web.console.templates=/etc/prometheus/consoles'
+#         - '--storage.tsdb.retention.time=24h'
+#         - '--web.enable-lifecycle'
+#         - '--web.enable-admin-api'
+#         - '--storage.tsdb.max-block-duration=2h'
+#         - '--storage.tsdb.min-block-duration=2h'
+#         - '--web.enable-remote-write-receiver'
+#         ports:
+#         - containerPort: 9090
+#           name: web
+#         resources:
+#           requests:
+#             cpu: 100m
+#             memory: 512Mi
+#           limits:
+#             cpu: 500m
+#             memory: 1Gi
+#         volumeMounts:
+#         - name: config
+#           mountPath: /etc/prometheus
+#         - name: storage
+#           mountPath: /prometheus
+#         - name: rules
+#           mountPath: /etc/prometheus/rules
+#       volumes:
+#       - name: config
+#         configMap:
+#           name: prometheus-config
+#       - name: storage
+#         emptyDir:
+#           sizeLimit: 5Gi
+#       - name: rules
+#         configMap:
+#           name: prometheus-config
+#           items:
+#           - key: alerts.yml
+#             path: alerts.yml
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: prometheus
+#   namespace: ${MONITORING_NAMESPACE}
+#   labels:
+#     app: prometheus
+#   annotations:
+#     prometheus.io/scrape: "true"
+#     prometheus.io/port: "9090"
+# spec:
+#   selector:
+#     app: prometheus
+#   type: LoadBalancer
+#   ports:
+#   - port: 9090
+#     targetPort: 9090
+#     name: web
+# ---
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: prometheus
+#   namespace: ${MONITORING_NAMESPACE}
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: prometheus
+# rules:
+# - apiGroups: [""]
+#   resources: ["nodes", "nodes/proxy", "nodes/metrics", "services", "endpoints", "pods"]
+#   verbs: ["get", "list", "watch"]
+# - apiGroups: ["extensions", "apps"]
+#   resources: ["deployments", "replicasets"]
+#   verbs: ["get", "list", "watch"]
+# - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
+#   verbs: ["get"]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: prometheus
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: prometheus
+# subjects:
+# - kind: ServiceAccount
+#   name: prometheus
+#   namespace: ${MONITORING_NAMESPACE}
+# EOF
 
 kubectl apply -f monitoring/prometheus-config.yaml
 

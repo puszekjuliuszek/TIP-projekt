@@ -96,6 +96,8 @@ spec:
             port: 80
           initialDelaySeconds: 10
           periodSeconds: 10
+      nodeSelector:
+        simulation: real
 ---
 apiVersion: v1
 kind: Service
@@ -428,4 +430,4 @@ echo -e "   • Pody: $(kubectl get pods -n ${ISOTOPE_NAMESPACE} --no-headers | 
 echo -e "   • Load Generator: Aktywny"
 echo -e "${GREEN}📁 Informacje o wdrożeniu zapisane w testapp-info.txt${NC}"
 echo -e "${GREEN}🧪 Uruchom test: ./test-load.sh${NC}"
-echo -e "${GREEN}➡️  Następny krok: ./scripts/05-monitoring.sh${NC}" 
+echo -e "${GREEN}➡️  Następny krok: ./scripts/05-monitoring.sh${NC}"

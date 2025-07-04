@@ -8,8 +8,8 @@ Komponenty:
 - kube-state-metrics: Metryki stanu klastra
 
 Dostęp:
-- Grafana: http://ab2028e25bc8d454ab5a1b1bb4c5a59d-791981029.us-east-1.elb.amazonaws.com:3000 (admin/admin123)
-- Prometheus: http://ab6da15387ea840918118b82c9e5f5f1-819007504.us-east-1.elb.amazonaws.com:9090
+- Grafana: http://a72a0350937ad4275a56677eec0fcf78-2124252208.us-east-1.elb.amazonaws.com:3000 (admin/admin123)
+- Prometheus: http://afc057e85a8f14224acb8d5c8a62f4e9-932767269.us-east-1.elb.amazonaws.com:9090
 
 Kluczowe metryki monitorowane:
 - API Server latency i throughput
@@ -36,4 +36,4 @@ Sprawdzanie statusu:
 - kubectl logs -n monitoring deployment/prometheus
 - kubectl logs -n monitoring deployment/grafana
 
-Konfigurowano: Mon Jun 30 05:20:29 PM CEST 2025
+Konfigurowano: Thu Jul  3 08:05:25 PM CEST 2025
